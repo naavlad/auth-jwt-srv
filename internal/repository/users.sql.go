@@ -22,7 +22,7 @@ type GetUserByIDRow struct {
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (GetUserByIDRow, error) {
-	row := q.db.QueryRowContext(ctx, getUserByID, id)
+	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i GetUserByIDRow
 	err := row.Scan(&i.ID, &i.Username)
 	return i, err
@@ -36,7 +36,7 @@ LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
+	row := q.db.QueryRow(ctx, getUserByUsername, username)
 	var i User
 	err := row.Scan(&i.ID, &i.Username, &i.Password)
 	return i, err
