@@ -7,11 +7,21 @@ import (
 )
 
 type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username string `json:"username" example:"john_doe"`
+	Password string `json:"password" example:"secure_password"`
 }
 
-// Login обрабатывает запрос на вход
+// Login godoc
+// @Summary      Аутентификация пользователя
+// @Description  Получение JWT токенов по username и password
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request  body      LoginRequest  true  "Учетные данные"
+// @Success      200      {object}  service.LoginResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      401      {object}  ErrorResponse
+// @Router       /auth/login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -34,14 +44,24 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
 }
 
 type RefreshResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-// Refresh обновляет access токен
+// Refresh godoc
+// @Summary      Обновление access токена
+// @Description  Получение нового access токена с помощью refresh токена
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request  body      RefreshRequest  true  "Refresh токен"
+// @Success      200      {object}  RefreshResponse
+// @Failure      400      {object}  ErrorResponse
+// @Failure      401      {object}  ErrorResponse
+// @Router       /auth/refresh [post]
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -63,7 +83,15 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, RefreshResponse{AccessToken: accessToken})
 }
 
-// Me возвращает информацию о текущем пользователе
+// Me godoc
+// @Summary      Получение информации о пользователе
+// @Description  Возвращает информацию о текущем пользователе по access токену
+// @Tags         auth
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  service.UserInfo
+// @Failure      401  {object}  ErrorResponse
+// @Router       /auth/me [get]
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {

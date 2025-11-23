@@ -12,13 +12,35 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
+	httpSwagger "github.com/swaggo/http-swagger"
 
+	_ "github.com/naavlad/auth-jwt-srv/docs"
 	"github.com/naavlad/auth-jwt-srv/internal/config"
 	"github.com/naavlad/auth-jwt-srv/internal/handlers"
 	"github.com/naavlad/auth-jwt-srv/internal/repository"
 	"github.com/naavlad/auth-jwt-srv/internal/service"
 	"github.com/naavlad/auth-jwt-srv/internal/tokens"
 )
+
+// @title           Auth JWT Service API
+// @version         1.0
+// @description     Микросервис аутентификации с использованием JWT токенов
+// @termsOfService  http://swagger.io/terms/
+
+// @contact.name   API Support
+// @contact.url    http://github.com/naavlad/auth-jwt-srv
+// @contact.email  support@example.com
+
+// @license.name  MIT
+// @license.url   https://opensource.org/licenses/MIT
+
+// @host      localhost:8080
+// @BasePath  /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
 	// Загрузка конфигурации
@@ -64,6 +86,11 @@ func main() {
 	r.Post("/auth/login", handler.Login)
 	r.Post("/auth/refresh", handler.Refresh)
 	r.Get("/auth/me", handler.Me)
+
+	// Swagger UI
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
+	))
 
 	// Настройка HTTP сервера
 	srv := &http.Server{

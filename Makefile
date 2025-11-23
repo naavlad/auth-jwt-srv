@@ -1,9 +1,10 @@
-.PHONY: help run sqlc-generate docker-build docker-up docker-down docker-logs test test-coverage
+.PHONY: help run sqlc-generate docker-build docker-up docker-down docker-logs test test-coverage swagger
 
 help:
 	@echo "Available commands:"
 	@echo "  make run            - Run the application locally"
 	@echo "  make sqlc-generate  - Generate code from SQL queries"
+	@echo "  make swagger        - Generate Swagger documentation"
 	@echo "  make test           - Run tests"
 	@echo "  make test-coverage  - Run tests with coverage"
 	@echo "  make docker-build   - Build Docker image"
@@ -16,6 +17,9 @@ run:
 
 sqlc-generate:
 	~/go/bin/sqlc generate
+
+swagger:
+	~/go/bin/swag init -g cmd/api/main.go -o docs
 
 test:
 	go test -v ./...
