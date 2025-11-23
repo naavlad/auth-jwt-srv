@@ -22,6 +22,9 @@ WORKDIR /root/
 # Копируем бинарник из builder
 COPY --from=builder /app/main .
 
+# Копируем Swagger документацию
+COPY --from=builder /app/docs ./docs
+
 # Открываем порт
 EXPOSE 8080
 
