@@ -1,0 +1,511 @@
+# 🔐 Auth JWT Service
+
+Микросервис аутентификации на базе JWT токенов, построенный с использованием современного стека технологий Go.
+
+## 📋 Описание
+
+Легковесный и производительный сервис аутентификации, предоставляющий REST API для управления пользовательскими сессиями через JWT токены. Сервис работает с внешней PostgreSQL базой данных и обеспечивает безопасное хранение и валидацию токенов доступа.
+
+### ✨ Возможности
+
+- 🔑 Аутентификация пользователей по username/password
+- 🎫 Генерация JWT access и refresh токенов
+- 🔄 Обновление access токенов через refresh токены
+- 👤 Получение информации о текущем пользователе
+- 🏥 Health check эндпойнт для мониторинга
+- 🐳 Готовый Docker образ для деплоя
+- 🔒 Type-safe работа с БД через sqlc
+
+## 🏗️ Архитектура
+
+Проект следует принципам Clean Architecture и разделен на следующие слои:
+
+```
+auth-jwt-srv/
+├── cmd/api/                    # Точка входа приложения
+│   └── main.go
+├── internal/
+│   ├── config/                 # Конфигурация приложения
+│   │   └── config.go
+│   ├── handlers/               # HTTP обработчики
+│   │   ├── handler.go
+│   │   ├── health.go
+│   │   └── auth.go
+│   ├── service/                # Бизнес-логика
+│   │   └── auth.go
+│   ├── repository/             # Слой доступа к данным (генерируется sqlc)
+│   │   ├── db.go
+│   │   ├── models.go
+│   │   └── users.sql.go
+│   └── tokens/                 # JWT утилиты
+│       └── jwt.go
+├── queries/                    # SQL запросы для sqlc
+│   ├── schema.sql
+│   └── users.sql
+├── docker-compose.yml          # Docker Compose конфигурация
+├── Dockerfile                  # Multi-stage Docker образ
+├── sqlc.yaml                   # Конфигурация sqlc
+├── Makefile                    # Команды для разработки
+├── .env.example                # Пример переменных окружения
+└── go.mod
+```
+
+## 🚀 Быстрый старт
+
+### Предварительные требования
+
+- Go 1.21+ (для локальной разработки)
+- Docker & Docker Compose (для контейнеризации)
+- PostgreSQL база данных с таблицей `users`
+- sqlc (для генерации кода из SQL)
+
+### Структура таблицы users
+
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL
+);
+```
+
+### Установка и запуск
+
+#### 🐳 Docker (рекомендуется)
+
+1. **Клонируйте репозиторий:**
+
+```bash
+git clone https://github.com/naavlad/auth-jwt-srv.git
+cd auth-jwt-srv
+```
+
+2. **Настройте переменные окружения:**
+
+```bash
+cp .env.example .env
+```
+
+Отредактируйте `.env` файл:
+
+```env
+DATABASE_URL=postgres://user:password@host.docker.internal:5432/dbname?sslmode=disable
+JWT_SECRET=your-very-secret-key-min-32-chars
+JWT_ACCESS_TOKEN_DURATION=15m
+JWT_REFRESH_TOKEN_DURATION=168h
+SERVER_PORT=8080
+```
+
+> ⚠️ **Важно:** Если ваша БД запущена локально, используйте `host.docker.internal` вместо `localhost`
+
+3. **Соберите и запустите сервис:**
+
+```bash
+make docker-up
+```
+
+4. **Проверьте статус:**
+
+```bash
+make docker-logs
+```
+
+5. **Тестируйте API:**
+
+```bash
+curl http://localhost:8080/health
+```
+
+#### 💻 Локальная разработка
+
+1. **Установите зависимости:**
+
+```bash
+go mod download
+```
+
+2. **Установите sqlc:**
+
+```bash
+go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+```
+
+3. **Сгенерируйте код из SQL:**
+
+```bash
+make sqlc-generate
+```
+
+4. **Настройте `.env` файл:**
+
+```bash
+cp .env.example .env
+# Отредактируйте .env
+```
+
+5. **Запустите сервис:**
+
+```bash
+make run
+```
+
+Сервис будет доступен на `http://localhost:8080`
+
+## 📡 API Эндпойнты
+
+### 1. Health Check
+
+Проверка доступности сервиса.
+
+**Endpoint:** `GET /health`
+
+**Response:**
+
+```json
+{
+  "status": "ok"
+}
+```
+
+**Пример:**
+
+```bash
+curl http://localhost:8080/health
+```
+
+---
+
+### 2. Login (Вход)
+
+Аутентификация пользователя и получение JWT токенов.
+
+**Endpoint:** `POST /auth/login`
+
+**Request Body:**
+
+```json
+{
+  "username": "john_doe",
+  "password": "secure_password"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Коды ошибок:**
+
+- `400` - Невалидный request body
+- `401` - Неверные учетные данные
+
+**Пример:**
+
+```bash
+curl -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "john_doe",
+    "password": "secure_password"
+  }'
+```
+
+---
+
+### 3. Refresh Token (Обновление токена)
+
+Получение нового access токена с помощью refresh токена.
+
+**Endpoint:** `POST /auth/refresh`
+
+**Request Body:**
+
+```json
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+**Коды ошибок:**
+
+- `400` - Refresh token отсутствует
+- `401` - Невалидный или истекший refresh token
+
+**Пример:**
+
+```bash
+curl -X POST http://localhost:8080/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "your_refresh_token_here"
+  }'
+```
+
+---
+
+### 4. Get User Info (Получение данных пользователя)
+
+Получение информации о текущем пользователе по access токену.
+
+**Endpoint:** `GET /auth/me`
+
+**Headers:**
+
+```
+Authorization: Bearer <access_token>
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": 1,
+  "username": "john_doe"
+}
+```
+
+**Коды ошибок:**
+
+- `401` - Authorization header отсутствует или невалиден
+- `401` - Access token невалиден или истек
+
+**Пример:**
+
+```bash
+curl http://localhost:8080/auth/me \
+  -H "Authorization: Bearer your_access_token_here"
+```
+
+## ⚙️ Конфигурация
+
+### Переменные окружения
+
+| Переменная                   | Описание                       | Значение по умолчанию | Обязательна |
+| ---------------------------- | ------------------------------ | --------------------- | ----------- |
+| `DATABASE_URL`               | PostgreSQL connection string   | -                     | ✅          |
+| `JWT_SECRET`                 | Секретный ключ для подписи JWT | -                     | ✅          |
+| `JWT_ACCESS_TOKEN_DURATION`  | Время жизни access токена      | `15m`                 | ❌          |
+| `JWT_REFRESH_TOKEN_DURATION` | Время жизни refresh токена     | `168h` (7 дней)       | ❌          |
+| `SERVER_PORT`                | Порт для HTTP сервера          | `8080`                | ❌          |
+
+### Формат DATABASE_URL
+
+```
+postgres://username:password@host:port/database?sslmode=disable
+```
+
+**Примеры:**
+
+```env
+# Локальная БД
+DATABASE_URL=postgres://myuser:mypass@localhost:5432/authdb?sslmode=disable
+
+# Docker с host.docker.internal
+DATABASE_URL=postgres://myuser:mypass@host.docker.internal:5432/authdb?sslmode=disable
+
+# Внешняя БД
+DATABASE_URL=postgres://user:pass@db.example.com:5432/production?sslmode=require
+```
+
+### JWT конфигурация
+
+**Форматы времени:**
+
+- `s` - секунды
+- `m` - минуты
+- `h` - часы
+- `d` - дни (в cleanenv преобразуется в часы)
+
+**Примеры:**
+
+```env
+JWT_ACCESS_TOKEN_DURATION=30m     # 30 минут
+JWT_ACCESS_TOKEN_DURATION=1h      # 1 час
+JWT_REFRESH_TOKEN_DURATION=168h   # 7 дней
+JWT_REFRESH_TOKEN_DURATION=720h   # 30 дней
+```
+
+## 🛠️ Разработка
+
+### Доступные Make команды
+
+| Команда              | Описание                       |
+| -------------------- | ------------------------------ |
+| `make help`          | Показать все доступные команды |
+| `make run`           | Запустить сервис локально      |
+| `make sqlc-generate` | Сгенерировать Go код из SQL    |
+| `make docker-build`  | Собрать Docker образ           |
+| `make docker-up`     | Запустить в Docker Compose     |
+| `make docker-down`   | Остановить Docker контейнеры   |
+| `make docker-logs`   | Просмотр логов контейнера      |
+
+### Работа с sqlc
+
+При изменении SQL запросов в `queries/*.sql`:
+
+1. Обновите SQL файлы
+2. Запустите генерацию:
+
+```bash
+make sqlc-generate
+```
+
+3. Код будет обновлен в `internal/repository/`
+
+### Добавление новых эндпойнтов
+
+1. **Добавьте SQL запрос** в `queries/users.sql`
+2. **Сгенерируйте код:** `make sqlc-generate`
+3. **Добавьте метод в service** (`internal/service/auth.go`)
+4. **Создайте handler** (`internal/handlers/auth.go`)
+5. **Зарегистрируйте роут** в `cmd/api/main.go`
+
+## 🔧 Технологический стек
+
+- **[Go 1.23](https://go.dev/)** - Язык программирования
+- **[Chi](https://github.com/go-chi/chi)** - HTTP роутер
+- **[sqlc](https://sqlc.dev/)** - Type-safe SQL генератор
+- **[pgx/v5](https://github.com/jackc/pgx)** - PostgreSQL драйвер
+- **[golang-jwt/jwt](https://github.com/golang-jwt/jwt)** - JWT библиотека
+- **[cleanenv](https://github.com/ilyakaznacheev/cleanenv)** - Конфигурация
+- **Docker & Docker Compose** - Контейнеризация
+
+## 📦 Docker
+
+### Сборка образа
+
+```bash
+docker build -t auth-jwt-srv:latest .
+```
+
+### Запуск контейнера
+
+```bash
+docker run -d \
+  --name auth-jwt-srv \
+  -p 8080:8080 \
+  -e DATABASE_URL="postgres://user:pass@host:5432/db" \
+  -e JWT_SECRET="your-secret-key" \
+  auth-jwt-srv:latest
+```
+
+### Docker Compose
+
+```bash
+# Запуск
+docker-compose up -d
+
+# Просмотр логов
+docker-compose logs -f app
+
+# Остановка
+docker-compose down
+```
+
+## 🔒 Безопасность
+
+### Рекомендации
+
+1. **JWT_SECRET:** Используйте криптографически стойкий ключ (минимум 32 символа)
+2. **DATABASE_URL:** Не коммитьте `.env` файл в git
+3. **Пароли:** В production используйте bcrypt хеширование
+4. **SSL/TLS:** Включайте `sslmode=require` для production БД
+5. **HTTPS:** Используйте reverse proxy (nginx) с SSL сертификатами
+6. **Rate Limiting:** Добавьте middleware для защиты от брутфорса
+
+### Генерация секретного ключа
+
+```bash
+# Linux/macOS
+openssl rand -base64 32
+
+# Или используйте Go
+go run -c 'package main; import ("crypto/rand"; "encoding/base64"; "fmt"); func main() { b := make([]byte, 32); rand.Read(b); fmt.Println(base64.StdEncoding.EncodeToString(b)) }'
+```
+
+## 🐛 Отладка
+
+### Просмотр логов
+
+```bash
+# Docker
+make docker-logs
+
+# Локально - логи выводятся в stdout
+```
+
+### Проверка подключения к БД
+
+```bash
+# Внутри контейнера
+docker exec -it auth-jwt-srv ./main
+
+# Проверка из host машины
+psql $DATABASE_URL -c "SELECT 1"
+```
+
+### Частые проблемы
+
+**Проблема:** `Failed to connect to database`
+
+- Проверьте `DATABASE_URL`
+- Убедитесь, что БД доступна
+- Для Docker используйте `host.docker.internal`
+
+**Проблема:** `invalid refresh token`
+
+- Токен истек
+- Неверный `JWT_SECRET`
+- Токен был сгенерирован с другим ключом
+
+## 📊 Мониторинг
+
+### Health Check
+
+Используйте `/health` для проверки доступности:
+
+```bash
+curl -f http://localhost:8080/health || exit 1
+```
+
+### Docker Health Check
+
+Добавьте в `Dockerfile`:
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+```
+
+## 📝 Лицензия
+
+MIT License - см. LICENSE файл
+
+## 🤝 Контрибьюция
+
+1. Fork репозиторий
+2. Создайте feature ветку (`git checkout -b feature/amazing-feature`)
+3. Commit изменения (`git commit -m 'Add amazing feature'`)
+4. Push в ветку (`git push origin feature/amazing-feature`)
+5. Откройте Pull Request
+
+## 📧 Контакты
+
+GitHub: [@naavlad](https://github.com/naavlad)
+
+---
+
+⭐ Если проект был полезен, поставьте звезду на GitHub!
